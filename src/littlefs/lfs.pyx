@@ -1,3 +1,5 @@
+from libc.string cimport memset
+
 import logging
 from collections import namedtuple
 # Import all definitions
@@ -52,11 +54,12 @@ cdef int _raise_on_error(int code) except -1:
 
 
 cdef class LFSConfig:
-
     cdef lfs_config _impl
     cdef dict __dict__
 
     def __cinit__(self):
+        # config struct memory must be initialized
+        memset(&self._impl, 0, sizeof(lfs_config))
         self._impl.read = &_lfs_read
         self._impl.prog = &_lfs_prog
         self._impl.erase = &_lfs_erase
@@ -64,10 +67,9 @@ cdef class LFSConfig:
 
 
     def __init__(self, context=None, **kwargs):
-        # If the block size and count is not given, create a
-        # small memory with minimal block size and 8KB size
-        block_size = kwargs.get('block_size', 128)
-        block_count = kwargs.get('block_count', 64)
+        # block size, block count must be defined for used flash
+        block_size = kwargs['block_size']
+        block_count = kwargs['block_count']
 
         if block_size < 128:
             raise ValueError('Minimal block size is 128')
@@ -76,7 +78,8 @@ cdef class LFSConfig:
         self._impl.prog_size = kwargs.get('prog_size', block_size)
         self._impl.block_size = block_size
         self._impl.block_count = block_count
-        self._impl.block_cycles = kwargs.get('block_cycles', -1)
+        # littlefs recommends 100-1000 block cycles for proper wear leveling and performance
+        self._impl.block_cycles = kwargs.get('block_cycles', 250)
         # Cache size, at least as big as read / prog size
         self._impl.cache_size = kwargs.get('cache_size', max(self._impl.read_size, self._impl.prog_size))
         # Lookahead buffer size in bytes
